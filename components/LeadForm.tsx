@@ -1,160 +1,147 @@
 'use client';
 import { useState } from 'react';
+import { LeadFormData } from '@/types/lead';
+import { TextField, SelectField, MessageField } from './Field';
 
-type FormData = {
-  fullName: string;
-  email: string;
-  company: string;
-  source: string;
-  message: string;
-};
 
-const initialFormData: FormData = {
-  fullName: '',
-  email: '',
-  company: '',
-  source: '',
-  message: '',
+const initialFormData: LeadFormData = {
+	fullName: '',
+	email: '',
+	company: '',
+	source: '',
+	message: '',
 };
 
 export default function LeadForm() {
-  const [formData, setFormData] = useState<FormData>(initialFormData);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [statusMessage, setStatusMessage] = useState('');
+	const [formData, setFormData] = useState<LeadFormData>(initialFormData);
+	const [isSubmitting, setIsSubmitting] = useState(false);
+	const [statusMessage, setStatusMessage] = useState('');
 
-  function updateField(field: keyof FormData, value: string) {
-    setFormData({
-      ...formData,
-      [field]: value,
-    });
-  }
+	function updateField(field: keyof LeadFormData, value: string) {
+		setFormData({
+			...formData,
+			[field]: value,
+		});
+	}
 
-  function validateFormData(formData: FormData) {
-    if (!formData.fullName.trim()) {
-      return 'Full name is required.';
-    }
+	// Validates email using simple regex pattern from https://stackoverflow.com/a/9204568 
+	function isValidEmail(email: string) {
+		return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+	}
+	
+	function validateFormData(formData: LeadFormData) {
+		if (!formData.fullName.trim()) {
+			return 'Full name is required.';
+		}
 
-    if (!formData.email.trim()) {
-      return 'Email is required.';
-    }
+		if (!formData.email.trim() || !isValidEmail(formData.email)) {
+			return 'A valid email is required.';
+		}
 
-    if (!formData.email.includes('@')) {
-      return 'Enter a valid email.';
-    }
+		if (!formData.source) {
+			return 'Choose how you heard about us.';
+		}
 
-    if (!formData.source) {
-      return 'Choose how you heard about us.';
-    }
-
-    return null;
-  }
-
-
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-
-    setStatusMessage('');
-
-    const validationError = validateFormData(formData);
-    if (validationError) {
-      setStatusMessage(validationError);
-      return;
-    }
-
-    setIsSubmitting(true);
-
-    // POST to /api/leads
-    try {
-      const response = await fetch('/api/leads', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(formData),
-      });
-
-      if (!response.ok) {
-        setStatusMessage('Something went wrong. Please try again.');
-        return;
-      }
-
-      setFormData(initialFormData);
-      setStatusMessage('Lead submitted successfully.');
-    } catch {
-      setStatusMessage('Network error. Please try again.');
-    } finally {
-      //TODO - handle success state in UI
-      setIsSubmitting(false);
-    }
-  }
+		return null;
+	}
 
 
-  return (
-    <form onSubmit={handleSubmit} className="space-y-4">
-      {statusMessage && (
-        <p className="rounded border p-3 text-sm">{statusMessage}</p>
-      )}
+	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+		event.preventDefault();
 
-      <div>
-        <label className="block">Full name *</label>
-        <input
-          className="w-full border p-2"
-          value={formData.fullName}
-          onChange={(event) => updateField('fullName', event.target.value)}
-        />
-      </div>
+		setStatusMessage('');
 
-      <div>
-        <label className="block">Email *</label>
-        <input
-          className="w-full border p-2"
-          type="email"
-          value={formData.email}
-          onChange={(event) => updateField('email', event.target.value)}
-        />
-      </div>
+		const validationError = validateFormData(formData);
+		if (validationError) {
+			setStatusMessage(validationError);
+			return;
+		}
 
-      <div>
-        <label className="block">Company</label>
-        <input
-          className="w-full border p-2"
-          value={formData.company}
-          onChange={(event) => updateField('company', event.target.value)}
-        />
-      </div>
+		setIsSubmitting(true);
 
-      <div>
-        <label className="block">How did you hear about us? *</label>
-        <select
-          className="w-full border p-2"
-          value={formData.source}
-          onChange={(event) => updateField('source', event.target.value)}
-        >
-          <option value="">Select one</option>
-          <option value="Google">Google</option>
-          <option value="Referral">Referral</option>
-          <option value="Social">Social</option>
-          <option value="Other">Other</option>
-        </select>
-      </div>
+		// POST to /api/leads
+		try {
+			const response = await fetch('/api/leads', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json',
+				},
+				body: JSON.stringify(formData),
+			});
 
-      <div>
-        <label className="block">Message</label>
-        <textarea
-          className="w-full border p-2"
-          rows={4}
-          value={formData.message}
-          onChange={(event) => updateField('message', event.target.value)}
-        />
-      </div>
+			if (!response.ok) {
+				// TODO: handle error messages from server and display to user
+				setStatusMessage('Something went wrong. Please try again.');
+				return;
+			}
 
-      <button
-        type="submit"
-        disabled={isSubmitting}
-        className="border px-4 py-2 disabled:opacity-50"
-      >
-        {isSubmitting ? 'Submitting...' : 'Submit'}
-      </button>
-    </form>
-  );
+			const result = await response.json();
+			console.log('Server response:', result);
+
+			setFormData(initialFormData);
+			setStatusMessage('Lead submitted successfully.');
+		} catch {
+			setStatusMessage('Network error. Please try again.');
+		} finally {
+			//TODO - handle success state in UI
+			setIsSubmitting(false);
+		}
+	}
+
+
+	return (
+		<form onSubmit={handleSubmit} className="space-y-4">
+			{statusMessage && (
+				<p className="rounded border p-3 text-sm">{statusMessage}</p>
+			)}
+
+			<TextField
+				label="Full Name"
+				name="fullName"
+				value={formData.fullName}
+				required={true}
+				updateField={updateField}
+			/>
+
+			<TextField
+				label="Email"
+				name="email"
+				value={formData.email}
+				required={true}
+				updateField={updateField}
+			/>
+
+			<TextField
+				label="Company"
+				name="company"
+				value={formData.company}
+				updateField={updateField}
+			/>
+
+			<SelectField
+				label="How did you hear about us?"
+				name="source"
+				value={formData.source}
+				required={true}
+				updateField={updateField}
+				options={['Google', 'Referral', 'Social', 'Other']}
+				placeholder="Select one"
+			/>
+
+			<MessageField
+				label="Message"
+				name="message"
+				value={formData.message}
+				updateField={updateField}
+			/>
+
+			<button
+				type="submit"
+				disabled={isSubmitting}
+				className="border px-4 py-2 disabled:opacity-50 hover:cursor-pointer mx-auto block"
+			>
+				{isSubmitting ? 'Submitting...' : 'Submit'}
+			</button>
+		</form>
+	);
 }
