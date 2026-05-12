@@ -1,158 +1,134 @@
-import { NextResponse } from 'next/server';
-import { LeadFormData } from '@/types/lead';
-import { supabaseAdmin as supabase } from '@/lib/supabaseAdmin';
-import { LEAD_SOURCES, 
-        MAX_COMPANY_LENGTH, 
-        MAX_EMAIL_LENGTH, 
-        MAX_MESSAGE_LENGTH, 
-        MAX_NAME_LENGTH,
-        isValidEmail } from '@/lib/leadValidation';
-
-const allowedSources = LEAD_SOURCES;
+import { NextResponse } from "next/server";
+import { LeadFormData } from "@/types/lead";
+import { supabaseAdmin as supabase } from "@/lib/supabaseAdmin";
+import {
+  LEAD_SOURCES,
+  isValidSource,
+  validateFormData,
+} from "@/lib/leadValidation";
 
 function getErrorResponse(error: string, status: number = 400) {
-    return NextResponse.json({ error: error }, { status: status });
-}
-
-function isValidSource(source: string | undefined): source is typeof allowedSources[number] {
-  return allowedSources.includes(source as typeof allowedSources[number]);
+  return NextResponse.json({ error: error }, { status: status });
 }
 
 type LeadInsert = {
-    full_name: string;
-    email: string;
-    company: string | null;
-    hear_about_us: typeof LEAD_SOURCES[number];
-    message: string | null;
+  full_name: string;
+  email: string;
+  company: string | null;
+  hear_about_us: (typeof LEAD_SOURCES)[number];
+  message: string | null;
 };
 
 type ValidateLeadResult =
-    | { success: true; lead: LeadInsert }
-    | { success: false; error: string };
+  | { success: true; lead: LeadInsert }
+  | { success: false; error: string };
 
 function validateLead(formData: LeadFormData): ValidateLeadResult {
-    const fullName = formData.fullName?.trim();
-    const email = formData.email?.trim().toLowerCase();
-    const company = formData.company?.trim() || null;
-    const hearAboutUs = formData.source?.trim();
-    const message = formData.message?.trim() || null;
-    
-    if (!fullName) return {success: false, error: 'Full name is required.'};
-    if (!email || !email.includes('@') || !isValidEmail(email)) return {success: false, error: 'A valid email is required.'};
-    if (!isValidSource(hearAboutUs)) return {success: false, error: 'Invalid value for referral source.'};
+  const fullName = formData.fullName?.trim();
+  const email = formData.email?.trim().toLowerCase();
+  const company = formData.company?.trim() || null;
+  const hearAboutUs = formData.source?.trim();
+  const message = formData.message?.trim() || null;
 
-    if (fullName.length > MAX_NAME_LENGTH) return {success: false, error: `Full name must be less than ${MAX_NAME_LENGTH} characters.`};
-    if (email.length > MAX_EMAIL_LENGTH) return {success: false, error: `Email must be less than ${MAX_EMAIL_LENGTH} characters.`};
-    if (company && company.length > MAX_COMPANY_LENGTH) return {success: false, error: `Company name must be less than ${MAX_COMPANY_LENGTH} characters.`};
-    if (message && message.length > MAX_MESSAGE_LENGTH) return {success: false, error: `Message must be less than ${MAX_MESSAGE_LENGTH} characters.`};
+  const errorMessage = validateFormData(formData);
 
-    return {
-        success: true,
-        lead: {
-            full_name: fullName,
-            email: email,
-            company: company,
-            hear_about_us: hearAboutUs,
-            message: message,
-        }
-    };
-}
+  if (errorMessage) {
+    return { success: false, error: errorMessage };
+  }
 
-async function checkExistingLead(email: string) {
-    const { data: existingLead, error } = await supabase
-    .from('leads')
-    .select('id')
-    .eq('email', email)
-    .maybeSingle();
+  if (!isValidSource(hearAboutUs)) {
+    return { success: false, error: "Invalid value for referral source." };
+  }
 
-    return { existingLead, error };
+  return {
+    success: true,
+    lead: {
+      full_name: fullName,
+      email: email,
+      company: company,
+      hear_about_us: hearAboutUs,
+      message: message,
+    },
+  };
 }
 
 async function insertLead(lead: LeadInsert) {
-    const { data, error } = await supabase
-    .from('leads')
+  const { data, error } = await supabase
+    .from("leads")
     .insert(lead)
     .select()
     .single();
 
-    return { data, error };
+  return { data, error };
 }
 
-async function sendLeadToWebhook(lead: LeadInsert) {
-    const webhookUrl = process.env.WEBHOOK_URL;
-    const candidateName = "Mike Dowd"
+async function sendLeadToWebhook(lead: LeadInsert): Promise<boolean> {
+  const webhookUrl = process.env.WEBHOOK_URL;
+  const candidateName = "Mike Dowd";
 
-    if (!webhookUrl) {
-        console.error('Webhook URL is missing from environment variables.');
-        return;
+  if (!webhookUrl) {
+    console.error("Webhook URL is missing from environment variables.");
+    return false;
+  }
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Candidate-Name": candidateName,
+      },
+      body: JSON.stringify(lead),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Webhook responded with status ${response.status}`);
     }
-
-    try {
-        const response = await fetch(webhookUrl, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-Candidate-Name': candidateName,
-            },
-            body: JSON.stringify(lead),
-        });
-
-        const responseText = await response.text();
-
-        if (!response.ok) {
-            console.error('Webhook failed:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: responseText,
-            });
-        }
-        else {
-            console.log('Webhook sent successfully:', {
-                status: response.status,
-                statusText: response.statusText,
-                body: responseText,
-            });
-        }
-    } catch (error) {
-        console.error('Webhook request error:', error);
-    }
+    return true;
+  } catch (error) {
+    console.error("Webhook request error:", error);
+    return false;
+  }
 }
 
 // POST /api/leads
 // add form data to supabase table and forward to webhook
 export async function POST(request: Request) {
-    //TODO - implement this, add form data to supabase table and forward to webhook
-    let formData: LeadFormData;
-    try {
-        formData = await request.json();
-    } catch (error) {
-        console.error('Invalid JSON body:', error);
-        return getErrorResponse('Invalid request body.', 400);
+  let formData: LeadFormData;
+  try {
+    formData = await request.json();
+  } catch (error) {
+    console.error("Invalid JSON body:", error);
+    return getErrorResponse("Invalid request body.", 400);
+  }
+
+  const lead = validateLead(formData);
+  if (!lead.success) {
+    return getErrorResponse(lead.error, 400);
+  }
+
+  const { data, error } = await insertLead(lead.lead);
+
+  if (error) {
+    console.error("Supabase insert error:", error);
+
+    if (error.code === "23505") {
+      return getErrorResponse("This email is already registered!", 409);
     }
 
-    const lead = validateLead(formData);
-    if (!lead.success) {
-        return getErrorResponse(lead.error, 400);
-    }
-    const { existingLead, error: existingLeadError } = await checkExistingLead(lead.lead.email);
-    if (existingLeadError) {
-        console.error('Error checking existing leads:', existingLeadError);
-        return getErrorResponse('Could not check existing leads.', 500);
-    }
-    if (existingLead) return getErrorResponse('This email is already registered!', 409);
+    return getErrorResponse("Error saving lead: " + error.message, 500);
+  }
 
-    // safe to insert now
-    const { data, error } = await insertLead(lead.lead);
+  console.log("Saved lead: ", data);
 
-    if (error) {
-        console.error('Supabase insert error:', error);
-        return getErrorResponse('Error saving lead: ' + error.message, 500);
-    }
+  const webhookSuccess = await sendLeadToWebhook(lead.lead);
 
-    console.log('Saved lead: ', data);
-
-    // await sendLeadToWebhook(lead.lead);
-
-    return NextResponse.json({ message: 'Lead saved successfully', lead: data }, { status: 201 });
-
+  return NextResponse.json(
+    {
+      message: "Lead saved successfully",
+      lead: data,
+      webhookStatus: webhookSuccess,
+    },
+    { status: 201 },
+  );
 }
