@@ -46,3 +46,6 @@ The supabase URL and role key can be found on your deployed supabase dashboard. 
 ```
 npm run dev
 ```
+
+## Deployed URL
+<https://secco-takehome.vercel.app/>
