@@ -37,8 +37,6 @@ function validateLead(formData: LeadFormData): ValidateLeadResult {
     const hearAboutUs = formData.source?.trim();
     const message = formData.message?.trim() || null;
     
-    console.log('Parsed fields:', { fullName, email, company, hearAboutUs, message });
-
     if (!fullName) return {success: false, error: 'Full name is required.'};
     if (!email || !email.includes('@') || !isValidEmail(email)) return {success: false, error: 'A valid email is required.'};
     if (!isValidSource(hearAboutUs)) return {success: false, error: 'Invalid value for referral source.'};
@@ -70,6 +68,56 @@ async function checkExistingLead(email: string) {
     return { existingLead, error };
 }
 
+async function insertLead(lead: LeadInsert) {
+    const { data, error } = await supabase
+    .from('leads')
+    .insert(lead)
+    .select()
+    .single();
+
+    return { data, error };
+}
+
+async function sendLeadToWebhook(lead: LeadInsert) {
+    const webhookUrl = process.env.WEBHOOK_URL;
+    const candidateName = "Mike Dowd"
+
+    if (!webhookUrl) {
+        console.error('Webhook URL is missing from environment variables.');
+        return;
+    }
+
+    try {
+        const response = await fetch(webhookUrl, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Candidate-Name': candidateName,
+            },
+            body: JSON.stringify(lead),
+        });
+
+        const responseText = await response.text();
+
+        if (!response.ok) {
+            console.error('Webhook failed:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: responseText,
+            });
+        }
+        else {
+            console.log('Webhook sent successfully:', {
+                status: response.status,
+                statusText: response.statusText,
+                body: responseText,
+            });
+        }
+    } catch (error) {
+        console.error('Webhook request error:', error);
+    }
+}
+
 // POST /api/leads
 // add form data to supabase table and forward to webhook
 export async function POST(request: Request) {
@@ -81,8 +129,6 @@ export async function POST(request: Request) {
         console.error('Invalid JSON body:', error);
         return getErrorResponse('Invalid request body.', 400);
     }
-
-    console.log('Received data:', formData);
 
     const lead = validateLead(formData);
     if (!lead.success) {
@@ -96,18 +142,16 @@ export async function POST(request: Request) {
     if (existingLead) return getErrorResponse('This email is already registered!', 409);
 
     // safe to insert now
-    const { data, error } = await supabase
-    .from('leads')
-    .insert(lead.lead)
-    .select()
-    .single();
+    const { data, error } = await insertLead(lead.lead);
 
     if (error) {
-        console.log('Supabase insert error:', error);
+        console.error('Supabase insert error:', error);
         return getErrorResponse('Error saving lead: ' + error.message, 500);
     }
 
     console.log('Saved lead: ', data);
+
+    // await sendLeadToWebhook(lead.lead);
 
     return NextResponse.json({ message: 'Lead saved successfully', lead: data }, { status: 201 });
 
