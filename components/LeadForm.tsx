@@ -5,8 +5,10 @@ import { TextField, SelectField, MessageField } from './Field';
 import { MAX_NAME_LENGTH, 
 		MAX_EMAIL_LENGTH, 
 		MAX_COMPANY_LENGTH, 
-		MAX_MESSAGE_LENGTH, 
+		MAX_MESSAGE_LENGTH,
+		LEAD_SOURCES,
 		isValidEmail } from '@/lib/leadValidation';
+import { submitLead } from '@/lib/leadApi';
 
 
 const initialFormData: LeadFormData = {
@@ -16,6 +18,13 @@ const initialFormData: LeadFormData = {
 	source: '',
 	message: '',
 };
+
+function scrollToTop() {
+	window.scrollTo({
+		top: 0,
+		behavior: 'smooth',
+	});
+}
 
 export default function LeadForm() {
 	const [formData, setFormData] = useState<LeadFormData>(initialFormData);
@@ -29,13 +38,25 @@ export default function LeadForm() {
 			[field]: value,
 		});
 	}
+
+	function validateMaxLength(value: string, name: string, maxLength: number) {
+		if (value.length > maxLength) {
+			return `${name} must be less than ${maxLength} characters.`;
+		}
+		return null;
+	}
 	
 	function validateFormData(formData: LeadFormData) {
-		if (!formData.fullName.trim()) {
+		const fullName = formData.fullName.trim();
+		const email = formData.email.trim();
+		const company = formData.company.trim();
+		const message = formData.message.trim();
+
+		if (!fullName) {
 			return 'Full name is required.';
 		}
 
-		if (!formData.email.trim() || !isValidEmail(formData.email)) {
+		if (!email || !isValidEmail(email)) {
 			return 'A valid email is required.';
 		}
 
@@ -43,36 +64,23 @@ export default function LeadForm() {
 			return 'Choose how you heard about us.';
 		}
 
-		if (formData.fullName.length > MAX_NAME_LENGTH) {
-			return `Full name must be less than ${MAX_NAME_LENGTH} characters.`;
-		}
-
-		if (formData.email.length > MAX_EMAIL_LENGTH) {
-			return `Email must be less than ${MAX_EMAIL_LENGTH} characters.`;
-		}
-
-		if (formData.company.length > MAX_COMPANY_LENGTH) {
-			return `Company must be less than ${MAX_COMPANY_LENGTH} characters.`;
-		}
-
-		if (formData.message.length > MAX_MESSAGE_LENGTH) {
-			return `Message must be less than ${MAX_MESSAGE_LENGTH} characters.`;
-		}
-
-		return null;
+		return (
+			validateMaxLength(fullName, 'Full name', MAX_NAME_LENGTH) ||
+			validateMaxLength(email, 'Email', MAX_EMAIL_LENGTH) ||
+			validateMaxLength(company, 'Company', MAX_COMPANY_LENGTH) ||
+			validateMaxLength(message, 'Message', MAX_MESSAGE_LENGTH)
+		);
 	}
-
 
 	async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
 		event.preventDefault();
-		console.log("handleSubmit");
-
 		setStatusMessage('');
 
 		const validationError = validateFormData(formData);
 		if (validationError) {
 			setStatusType('error');
 			setStatusMessage(validationError);
+			scrollToTop();
 			return;
 		}
 
@@ -80,35 +88,21 @@ export default function LeadForm() {
 
 		// POST to /api/leads
 		try {
-			const response = await fetch('/api/leads', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json',
-				},
-				body: JSON.stringify(formData),
-			});
-
-			if (!response.ok) {
-				if (response.status === 409) {
-					setStatusType('error');
-					setStatusMessage('That email has already been registered.');
-				} else {
-					setStatusType('error');
-					setStatusMessage('Something went wrong. Please try again.');
-				}
+			const result = await submitLead(formData);
+			if (!result.success) {
+				setStatusType('error');
+				setStatusMessage(result.error);
 				return;
 			}
-
-			const result = await response.json();
-			console.log('Server response:', result);
-
 			setFormData(initialFormData);
 			setStatusType('success');
-			setStatusMessage('Lead submitted successfully.');
-		} catch {
-			setStatusMessage('Network error. Please try again.');
+			setStatusMessage('Lead submitted successfully!');
+		} catch (error) {
+			setStatusType('error');
+			setStatusMessage('An unexpected error occurred. Please try again.');
 		} finally {
 			setIsSubmitting(false);
+			scrollToTop();
 		}
 	}
 
@@ -154,7 +148,7 @@ export default function LeadForm() {
 				value={formData.source}
 				required={true}
 				updateField={updateField}
-				options={['Google', 'Referral', 'Social', 'Other']}
+				options={LEAD_SOURCES}
 				placeholder="Select one"
 			/>
 

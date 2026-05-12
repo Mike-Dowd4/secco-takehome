@@ -42,7 +42,7 @@ export function TextField({
 }
 
 type SelectFieldProps = FieldProps & {
-  options: string[];
+  options: readonly string[];
   placeholder?: string;
 };
 
