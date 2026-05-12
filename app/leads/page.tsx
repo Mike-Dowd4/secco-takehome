@@ -1,6 +1,10 @@
 import { getLeads } from '@/lib/leads';
 import { Lead } from '@/types/lead';
 
+// Force dynamic rendering and disable caching for this page
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
+
 export default async function LeadsPage() {
     const { data: leads, error } = await getLeads();
 
