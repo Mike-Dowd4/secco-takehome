@@ -6,6 +6,7 @@ type FieldProps = {
   name: keyof LeadFormData;
   value: string;
   required?: boolean;
+  maxLength?: number;
   updateField: (field: keyof LeadFormData, value: string) => void;
 };
 
@@ -20,11 +21,12 @@ export function TextField({
     value,
     required = false,
     updateField,
+    maxLength = 100
     }: FieldProps) {
     return (
         <div>
             <label className="block" htmlFor={name}>
-            {label} {required && '*'}
+            {label} {required && <span className="text-red-500">*</span>}
             </label>
 
             <input
@@ -33,6 +35,7 @@ export function TextField({
             className="w-full border p-2"
             value={value}
             onChange={(event) => updateField(name, event.target.value)}
+            maxLength={maxLength}
             />
         </div>
     );
@@ -62,18 +65,18 @@ export function SelectField({
     return (
         <div>
             <label className="block" htmlFor={name}>
-                {label} {required && '*'}
+                {label} {required && <span className="text-red-500">*</span>}
             </label>
             <select
                 id={name}
                 name={name}
-                className="w-full border p-2"
+                className="w-full border p-2 bg-black text-white"
                 value={value}
                 onChange={(event) => updateField(name, event.target.value)}
             >
-                {placeholder && <option value="">{placeholder}</option>}
+                {placeholder && <option value="" className="">{placeholder}</option>}
                 {options.map((option) => (
-                    <option key={option} value={option}>
+                    <option key={option} value={option} className="">
                         {option}
                     </option>
                 ))}
@@ -93,26 +96,34 @@ type MessageFieldProps = FieldProps & {
 // updateField: useState setter function for the formData that is updated by inputs and sent in POST body
 // rows: optional number to set the height of the textarea, defaults to 4
 export function MessageField({
-    label,
-    name,
-    value,
-    required = false,
-    updateField,
-    rows = 4
+  label,
+  name,
+  value,
+  required = false,
+  updateField,
+  rows = 4,
+  maxLength = 300
 }: MessageFieldProps) {
-    return (
-        <div>
-            <label className="block" htmlFor={name}>
-                {label} {required && '*'}
-            </label>
-            <textarea
-                id={name}
-                name={name}
-                className="w-full border p-2"
-                rows={rows}
-                value={value}
-                onChange={(event) => updateField(name, event.target.value)}
-            />
-        </div>
-    );
+
+  return (
+    <div>
+      <label className="block" htmlFor={name}>
+        {label} {required && <span className="text-red-500">*</span>}
+      </label>
+
+      <textarea
+        id={name}
+        name={name}
+        className="w-full border p-2"
+        rows={rows}
+        value={value}
+        maxLength={maxLength}
+        onChange={(event) => updateField(name, event.target.value)}
+      />
+
+      <p className="mt-1 text-right text-xs text-gray-500">
+        {value.length}/{maxLength}
+      </p>
+    </div>
+  );
 }

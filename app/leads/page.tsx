@@ -1,13 +1,5 @@
 import { getLeads } from '@/lib/leads';
-
-type Lead = {
-    id: number;
-    full_name: string;
-    email: string;
-    company: string | null;
-    hear_about_us: string;
-    created_at: string;
-};
+import { Lead } from '@/types/lead';
 
 export default async function LeadsPage() {
     const { data: leads, error } = await getLeads();
